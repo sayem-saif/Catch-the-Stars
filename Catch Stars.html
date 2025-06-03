@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Catch the Falling Stars</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <style>
+    body {
+      margin: 0;
+      overflow: hidden;
+      background: #000;
+      font-family: 'Orbitron', sans-serif;
+    }
+    canvas {
+      display: block;
+      background: linear-gradient(to bottom, #001d3d, #000814);
+      touch-action: none;
+    }
+    #overlay {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      color: white;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      text-align: center;
+      background: rgba(0, 0, 0, 0.85);
+      flex-direction: column;
+      font-size: 22px;
+      padding: 20px;
+      z-index: 10;
+    }
+    button {
+      margin: 10px;
+      padding: 12px 30px;
+      font-size: 18px;
+      border: none;
+      background: gold;
+      color: black;
+      border-radius: 8px;
+      cursor: pointer;
+    }
+  </style>
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@600&display=swap" rel="stylesheet">
+</head>
+<body>
+  <canvas id="gameCanvas"></canvas>
+  <div id="overlay">
+    <h1>🌟 Catch the Falling Stars</h1>
+    <p>Use arrow keys or swipe/move your finger to move the basket.<br>Catch stars to level up!</p>
+    <button id="startButton">Start Game</button>
+  </div>
+
+  <audio id="catchSound" src="catch.mp3" playsinline></audio>
+  <audio id="levelupSound" src="levelup.mp3" playsinline></audio>
+  <audio id="winSound" src="win.mp3" playsinline></audio>
+  <audio id="bgmusic" src="bgmusic.mp3" loop ></audio>
+
+  <script>
+    const canvas = document.getElementById("gameCanvas");
+    const ctx = canvas.getContext("2d");
+    const overlay = document.getElementById("overlay");
+    const startButton = document.getElementById("startButton");
+    const catchSound = document.getElementById("catchSound");
+    catchSound.volume = 0.5;
+    const levelupSound = document.getElementById("levelupSound");
+    levelupSound.volume = 0.6;
+    const winSound = document.getElementById("winSound");
+    winSound.volume = 0.7;
+    const bgmusic = document.getElementById("bgmusic");
+    bgmusic.volume = 0.3;
+
+    let basket, stars, score, level, caught, levelTarget;
+    let keys = {}, gameRunning = false;
+    let starTimer, levelTimer, timerDuration = 0, timeLeft = 0;
+    let canvasWidth, canvasHeight, maxLevel = 10;
+
+    function resizeCanvas() {
+      canvas.width = window.innerWidth;
+      canvas.height = window.innerHeight;
+      canvasWidth = canvas.width;
+      canvasHeight = canvas.height;
+    }
+    window.addEventListener('resize', resizeCanvas);
+    resizeCanvas();
+
+    function resetGame() {
+      basket = { x: canvasWidth / 2 - 50, y: canvasHeight - 60, width: 100, height: 30, speed: 10 };
+      stars = [];
+      score = 0;
+      level = 1;
+      caught = 0;
+      levelTarget = 12;
+      keys = {};
+    }
+
+    function startGame() {
+      bgmusic.play();
+      resetGame();
+      startLevel();
+      hideOverlay();
+      gameLoop();
+    }
+
+    function startLevel() {
+      caught = 0;
+      levelTarget = 10 + level * 2;
+      stars = [];
+      gameRunning = true;
+      basket.speed = 10 + level * 0.5;
+      const spawnRate = Math.max(1000 - level * 100, 300);
+      clearInterval(starTimer);
+      starTimer = setInterval(spawnStar, spawnRate);
+
+      if (level > 5) {
+        timerDuration = 30 + (10 - level) * 3;
+        timeLeft = timerDuration;
+        clearInterval(levelTimer);
+        levelTimer = setInterval(() => {
+          timeLeft--;
+          if (timeLeft <= 0) {
+            clearInterval(levelTimer);
+            showOverlay("⏰ Time's Up!", `Level ${level} Failed.`, "Restart", () => showPostFailOptions());
+          }
+        }, 1000);
+      }
+    }
+
+    function showPostFailOptions() {
+      overlay.innerHTML = `
+        <h1>😢 You Lost</h1>
+        <p>Try again?</p>
+        <button onclick="startGame()">Restart from Level 1</button>
+        <button onclick="retryLevel()">Retry Level ${level}</button>
+      `;
+      overlay.style.display = "flex";
+    }
+
+    function retryLevel() {
+      hideOverlay();
+      startLevel();
+      gameLoop();
+    }
+
+    function nextLevel() {
+      level++;
+      if (level > maxLevel) {
+        winSound.play();
+        showOverlay("🏆 Game Complete!", `Final Score: ${score}`, "Play Again", startGame);
+        return;
+      }
+
+      let msg = `Caught ${caught} stars.`;
+      let btns = `<button onclick="nextLevelProceed()">Next Level</button>`;
+      if (level === 6) {
+        msg += `<br><strong>⚠️ From now on, you have limited time to catch the stars!</strong>`;
+        btns += `<button onclick="startGame()">Restart from Level 1</button>
+                 <button onclick="retryLevel()">Retry Level ${level - 1}</button>`;
+      }
+      showOverlay(`✅ Level ${level - 1} Complete`, msg, btns);
+    }
+
+    function nextLevelProceed() {
+      hideOverlay();
+      startLevel();
+      gameLoop();
+    }
+
+    function showOverlay(title, message, buttonsHtml) {
+      gameRunning = false;
+      clearInterval(starTimer);
+      clearInterval(levelTimer);
+      overlay.innerHTML = `
+        <h1>${title}</h1>
+        <p>${message}</p>
+        ${buttonsHtml}
+      `;
+      overlay.style.display = "flex";
+      levelupSound.play();
+    }
+
+    function hideOverlay() {
+      overlay.style.display = "none";
+    }
+
+    function spawnStar() {
+      const x = Math.random() * (canvasWidth - 20) + 10;
+      const speed = 2 + level * 1.2 + Math.random() * 2;
+      stars.push({ x, y: 0, speed });
+    }
+
+    function drawStar(x, y, radius) {
+      const spikes = 5;
+      const outer = radius;
+      const inner = radius / 2;
+      let rot = Math.PI / 2 * 3;
+      let step = Math.PI / spikes;
+
+      ctx.beginPath();
+      ctx.moveTo(x, y - outer);
+      for (let i = 0; i < spikes; i++) {
+        ctx.lineTo(x + Math.cos(rot) * outer, y + Math.sin(rot) * outer);
+        rot += step;
+        ctx.lineTo(x + Math.cos(rot) * inner, y + Math.sin(rot) * inner);
+        rot += step;
+      }
+      ctx.closePath();
+      ctx.fillStyle = "yellow";
+      ctx.shadowColor = "gold";
+      ctx.shadowBlur = 10;
+      ctx.fill();
+      ctx.shadowBlur = 0;
+    }
+
+    function drawBasket() {
+      const { x, y, width, height } = basket;
+      ctx.fillStyle = "#a0522d";
+      ctx.beginPath();
+      ctx.moveTo(x, y);
+      ctx.lineTo(x + width, y);
+      ctx.lineTo(x + width - 10, y + height);
+      ctx.lineTo(x + 10, y + height);
+      ctx.closePath();
+      ctx.fill();
+    }
+
+    function updateStars() {
+      for (let i = stars.length - 1; i >= 0; i--) {
+        let star = stars[i];
+        star.y += star.speed;
+
+        if (
+          star.y + 10 >= basket.y &&
+          star.x >= basket.x &&
+          star.x <= basket.x + basket.width
+        ) {
+          stars.splice(i, 1);
+          caught++;
+          score++;
+          catchSound.play();
+          if (caught >= levelTarget) {
+            nextLevel();
+          }
+        } else if (star.y > canvasHeight) {
+          stars.splice(i, 1);
+        }
+      }
+    }
+
+    function drawStars() {
+      stars.forEach(s => drawStar(s.x, s.y, 10));
+    }
+
+    function drawUI() {
+      ctx.font = "18px Orbitron";
+      ctx.fillStyle = "rgba(255,255,255,0.85)";
+      ctx.fillText(`Score: ${score}`, 20, 30);
+      ctx.fillText(`Level: ${level}/${maxLevel}`, 20, 55);
+      ctx.fillText(`Caught: ${caught}/${levelTarget}`, 20, 80);
+      if (level > 5) ctx.fillText(`Time Left: ${timeLeft}s`, 20, 105);
+    }
+
+    function moveBasket() {
+      if (keys["ArrowLeft"] && basket.x > 0) basket.x -= basket.speed;
+      if (keys["ArrowRight"] && basket.x + basket.width < canvasWidth) basket.x += basket.speed;
+    }
+
+    function gameLoop() {
+      if (!gameRunning) return;
+      ctx.clearRect(0, 0, canvasWidth, canvasHeight);
+      moveBasket();
+      updateStars();
+      drawBasket();
+      drawStars();
+      drawUI();
+      requestAnimationFrame(gameLoop);
+    }
+
+    document.addEventListener("keydown", e => keys[e.key] = true);
+    document.addEventListener("keyup", e => keys[e.key] = false);
+
+    canvas.addEventListener("touchmove", e => {
+      let touchX = e.touches[0].clientX;
+      basket.x = touchX - basket.width / 2;
+    });
+
+    startButton.onclick = () => {
+      bgmusic.autoplay = true;
+      startGame();
+    };
+  </script>
+</body>
+</html>
