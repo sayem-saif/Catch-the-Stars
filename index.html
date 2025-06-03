@@ -57,7 +57,7 @@
   <audio id="catchSound" src="catch.mp3" playsinline></audio>
   <audio id="levelupSound" src="levelup.mp3" playsinline></audio>
   <audio id="winSound" src="win.mp3" playsinline></audio>
-  <audio id="bgmusic" src="bgmusic.mp3" loop ></audio>
+  <audio id="bgmusic" src="bgmusic.mp3" loop></audio>
 
   <script>
     const canvas = document.getElementById("gameCanvas");
@@ -123,20 +123,13 @@
           timeLeft--;
           if (timeLeft <= 0) {
             clearInterval(levelTimer);
-            showOverlay("⏰ Time's Up!", `Level ${level} Failed.`, "Restart", () => showPostFailOptions());
+            showOverlay("⏰ Time's Up!", `Level ${level} Failed.`, `
+              <button onclick="startGame()">Restart from Level 1</button>
+              <button onclick="retryLevel()">Retry Level ${level}</button>
+            `);
           }
         }, 1000);
       }
-    }
-
-    function showPostFailOptions() {
-      overlay.innerHTML = `
-        <h1>😢 You Lost</h1>
-        <p>Try again?</p>
-        <button onclick="startGame()">Restart from Level 1</button>
-        <button onclick="retryLevel()">Retry Level ${level}</button>
-      `;
-      overlay.style.display = "flex";
     }
 
     function retryLevel() {
